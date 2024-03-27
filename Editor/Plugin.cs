@@ -30,7 +30,7 @@ namespace WakaTime {
     private const string URL_PREFIX = "https://api.wakatime.com/api/v1/";
     private const int HEARTBEAT_COOLDOWN = 120;
 
-    private static HeartbeatResponse _lastHeartbeat;
+    private static Heartbeat _lastHeartbeat;
 
     static Plugin() {
       Initialize();
