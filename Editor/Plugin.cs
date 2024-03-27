@@ -142,7 +142,7 @@ namespace WakaTime {
       }
 
       var heartbeatJSON = JsonUtility.ToJson(heartbeat);
-      _lastHeartbeat = response.data;
+      _lastHeartbeat = heartbeat;
 
       // rostok using as suggested https://docs.unity3d.com/ScriptReference/Networking.UnityWebRequest.Dispose.html
       using(var request = UnityWebRequest.Post(URL_PREFIX + "users/current/heartbeats?api_key=" + _apiKey, string.Empty)) {
