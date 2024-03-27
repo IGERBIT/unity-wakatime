@@ -1,4 +1,4 @@
-#if (UNITY_EDITOR)
+#if (UNITY_EDITOR) || true
 
 using System;
 using System.IO;
@@ -8,6 +8,8 @@ using UnityEngine.Networking;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEditor.SceneManagement;
+using System.Collections;
+
 
 // Heavily inspired by https://github.com/bengsfort/WakaTime-Unity
 
@@ -124,7 +126,7 @@ namespace WakaTime {
       }
     }
 
-    static void SendHeartbeat(bool fromSave = false) {
+    static IEnumerator SendHeartbeat(bool fromSave = false) {
       if (_debug) Debug.Log("<WakaTime> Sending heartbeat...");
 
       var currentScene = EditorSceneManager.GetActiveScene().path;
@@ -136,44 +138,46 @@ namespace WakaTime {
       if ((heartbeat.time - _lastHeartbeat.time < HEARTBEAT_COOLDOWN) && !fromSave &&
         (heartbeat.entity == _lastHeartbeat.entity)) {
         if (_debug) Debug.Log("<WakaTime> Skip this heartbeat");
-        return;
+        yield break;
       }
 
       var heartbeatJSON = JsonUtility.ToJson(heartbeat);
+      _lastHeartbeat = response.data;
 
-      var request = UnityWebRequest.Post(URL_PREFIX + "users/current/heartbeats?api_key=" + _apiKey, string.Empty);
-      request.uploadHandler = new UploadHandlerRaw(System.Text.Encoding.UTF8.GetBytes(heartbeatJSON));
-      request.SetRequestHeader("Content-Type", "application/json");
+      // rostok using as suggested https://docs.unity3d.com/ScriptReference/Networking.UnityWebRequest.Dispose.html
+      using(var request = UnityWebRequest.Post(URL_PREFIX + "users/current/heartbeats?api_key=" + _apiKey, string.Empty)) {
+        request.uploadHandler = new UploadHandlerRaw(System.Text.Encoding.UTF8.GetBytes(heartbeatJSON));
 
-      request.SendWebRequest().completed +=
-        operation => {
-          if (request.downloadHandler.text == string.Empty) {
-            Debug.LogWarning(
-              "<WakaTime> Network is unreachable. Consider disabling completely if you're working offline");
-            return;
-          }
+        request.SetRequestHeader("Content-Type", "application/json");
 
-          if (_debug)
-            Debug.Log("<WakaTime> Got response\n" + request.downloadHandler.text);
-          var response =
-            JsonUtility.FromJson<Response<HeartbeatResponse>>(
-              request.downloadHandler.text);
+        yield return request.SendWebRequest();
 
-          if (response.error != null) {
-            if (response.error == "Duplicate") {
-              if (_debug) Debug.LogWarning("<WakaTime> Duplicate heartbeat");
-            }
-            else {
-              Debug.LogError(
-                "<WakaTime> Failed to send heartbeat to WakaTime!\n" +
-                response.error);
-            }
+        if (request.downloadHandler.text == string.Empty) {
+          Debug.LogWarning("<WakaTime> Network is unreachable. Consider disabling completely if you're working offline");
+          yield break;
+        }
+
+        if (_debug) Debug.Log("<WakaTime> Got response\n" + request.downloadHandler.text);
+        var response =
+          JsonUtility.FromJson<Response<HeartbeatResponse>>(
+            request.downloadHandler.text);
+
+        if (response.error != null) {
+          if (response.error == "Duplicate") {
+            if (_debug) Debug.LogWarning("<WakaTime> Duplicate heartbeat");
           }
           else {
-            if (_debug) Debug.Log("<WakaTime> Sent heartbeat!");
-            _lastHeartbeat = response.data;
+            Debug.LogError(
+              "<WakaTime> Failed to send heartbeat to WakaTime!\n" +
+              response.error);
           }
-        };
+
+          _lastHeartbeat = default;
+        }
+        else {
+          if (_debug) Debug.Log("<WakaTime> Sent heartbeat!");
+        }
+      }
     }
 
     [DidReloadScripts]
